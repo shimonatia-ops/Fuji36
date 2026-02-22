@@ -1,0 +1,16 @@
+# Docker ignore for backend services
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.idea/
+**/*.user
+**/*.suo
+**/*.cache
+**/.git/
+**/node_modules/
+**/README.md
+**/Dockerfile
+**/docker-compose*.yml
+**/.env
+**/.env.local

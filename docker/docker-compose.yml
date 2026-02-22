@@ -1,0 +1,193 @@
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: fuji36-mongodb
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: fuji36
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - fuji36-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Identity Service
+  identity-service:
+    build:
+      context: ../services/fuji36-services
+      dockerfile: ../../docker/services/identity/Dockerfile
+    container_name: fuji36-identity
+    restart: unless-stopped
+    ports:
+      - "5001:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Mongo__ConnectionString=mongodb://mongodb:27017
+      - Mongo__Database=fuji36
+      - JWT__Issuer=http://localhost:5000
+      - JWT__Audience=http://localhost:5000
+      - JWT__SigningKey=${JWT_SIGNING_KEY:-your-super-secret-key-change-in-production-min-32-chars}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - fuji36-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Planning Service
+  planning-service:
+    build:
+      context: ../services/fuji36-services
+      dockerfile: ../../docker/services/planning/Dockerfile
+    container_name: fuji36-planning
+    restart: unless-stopped
+    ports:
+      - "5002:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Mongo__ConnectionString=mongodb://mongodb:27017
+      - Mongo__Database=fuji36
+      - IdentityService__BaseUrl=http://identity-service:80
+    depends_on:
+      - mongodb
+      - identity-service
+    networks:
+      - fuji36-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Session Service
+  session-service:
+    build:
+      context: ../services/fuji36-services
+      dockerfile: ../../docker/services/session/Dockerfile
+    container_name: fuji36-session
+    restart: unless-stopped
+    ports:
+      - "5003:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Mongo__ConnectionString=mongodb://mongodb:27017
+      - Mongo__Database=fuji36
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - fuji36-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Analysis Orchestrator Service (Worker Service - no HTTP endpoint)
+  analysis-orchestrator:
+    build:
+      context: ../services/fuji36-services
+      dockerfile: ../../docker/services/analysis-orchestrator/Dockerfile
+    container_name: fuji36-analysis
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Mongo__ConnectionString=mongodb://mongodb:27017
+      - Mongo__Database=fuji36
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - fuji36-network
+    # Worker service - check if process is running
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f Fuji36.Analysis.Orchestrator || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ../services/fuji36-services
+      dockerfile: ../../docker/services/api-gateway/Dockerfile
+    container_name: fuji36-api-gateway
+    restart: unless-stopped
+    ports:
+      - "5000:80"
+      - "7000:443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Services__IdentityBaseUrl=http://identity-service:80
+      - Services__PlanningBaseUrl=http://planning-service:80
+      - Services__SessionBaseUrl=http://session-service:80
+      - JWT__Issuer=http://localhost:5000
+      - JWT__Audience=http://localhost:5000
+      - JWT__SigningKey=${JWT_SIGNING_KEY:-your-super-secret-key-change-in-production-min-32-chars}
+    depends_on:
+      identity-service:
+        condition: service_healthy
+      planning-service:
+        condition: service_healthy
+      session-service:
+        condition: service_healthy
+    networks:
+      - fuji36-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/services/frontend/Dockerfile
+    container_name: fuji36-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:5000
+    depends_on:
+      - api-gateway
+    networks:
+      - fuji36-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+
+networks:
+  fuji36-network:
+    driver: bridge

@@ -1,0 +1,6 @@
+# Local environment files
+.env
+.env.local
+
+# Docker volumes data (if mounted locally)
+volumes/
