@@ -30,11 +30,8 @@ public sealed class PlanProgressService : IPlanProgressService
         if (tasks.Count == 0)
             return PlanProgress.NotStarted;
 
-        var completedTasks = tasks.Count(t => t.Status == Fuji36.Common.Contracts.Planning.TaskStatus.Completed);
+        var completionPercentage = await CalculateProgressPercentageAsync(planId);
         var inProgressTasks = tasks.Count(t => t.Status == Fuji36.Common.Contracts.Planning.TaskStatus.InProgress);
-        var totalTasks = tasks.Count;
-
-        var completionPercentage = (completedTasks * 100) / totalTasks;
 
         // Determine progress status
         if (completionPercentage == 100)
@@ -49,7 +46,7 @@ public sealed class PlanProgressService : IPlanProgressService
         if (inProgressTasks > 0)
             return PlanProgress.InProgress;
 
-        return PlanProgress.NotStarted;
+        return completionPercentage > 0 ? PlanProgress.InProgress : PlanProgress.NotStarted;
     }
 
     public async Task<int> CalculateProgressPercentageAsync(string planId)
@@ -61,8 +58,9 @@ public sealed class PlanProgressService : IPlanProgressService
         if (tasks.Count == 0)
             return 0;
 
-        var completedTasks = tasks.Count(t => t.Status == Fuji36.Common.Contracts.Planning.TaskStatus.Completed);
-        return (completedTasks * 100) / tasks.Count;
+        // Plan progress = average of all task progress percentages
+        var sum = tasks.Sum(t => t.ProgressPercentage);
+        return sum / tasks.Count;
     }
 
     public async Task UpdatePlanProgressAsync(string planId)

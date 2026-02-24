@@ -5,7 +5,8 @@ import '../styles/App.css'
 /**
  * Default practice component shown when no specific practice is available
  */
-export default function DefaultPractice({ task, planId, onComplete }: PracticeComponentProps) {
+export default function DefaultPractice({ task, planId, onComplete, practiceMode = 'real' }: PracticeComponentProps) {
+  const isDraft = practiceMode === 'draft'
   const [isStarted, setIsStarted] = useState(false)
 
   const handleStart = () => {
@@ -13,7 +14,7 @@ export default function DefaultPractice({ task, planId, onComplete }: PracticeCo
   }
 
   const handleComplete = () => {
-    if (onComplete) {
+    if (onComplete && !isDraft) {
       onComplete(task.taskId, {
         completed: true,
         duration: 0,
@@ -24,6 +25,11 @@ export default function DefaultPractice({ task, planId, onComplete }: PracticeCo
 
   return (
     <div className="practice-container default-practice">
+      {isDraft && (
+        <div className="practice-draft-banner">
+          Preview mode – try the exercise to get an impression. Results are not saved.
+        </div>
+      )}
       <div className="practice-header">
         <h3>{task.name}</h3>
         {task.description && <p className="practice-description">{task.description}</p>}

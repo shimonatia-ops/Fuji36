@@ -26,6 +26,9 @@ public sealed class TaskEntity
     [BsonElement("status")]
     public PlanningTaskStatus Status { get; set; } = PlanningTaskStatus.NotStarted;
 
+    [BsonElement("progressPercentage")]
+    public int ProgressPercentage { get; set; } = 0;
+
     [BsonElement("dueDate")]
     public DateTimeOffset? DueDate { get; set; }
 

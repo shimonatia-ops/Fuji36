@@ -7,6 +7,7 @@ public interface ITask
     string Name { get; }
     string? Description { get; }
     TaskStatus Status { get; set; }
+    int ProgressPercentage { get; set; }
     DateTimeOffset? DueDate { get; set; }
     Dictionary<string, object> Properties { get; }
 }

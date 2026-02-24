@@ -150,6 +150,7 @@ public sealed class PlansController : ControllerBase
                     t.Name,
                     t.Description,
                     t.Status,
+                    t.ProgressPercentage,
                     t.DueDate,
                     propertiesDict
                 );
@@ -223,6 +224,7 @@ public sealed class PlansController : ControllerBase
             t.Name,
             t.Description,
             t.Status,
+            t.ProgressPercentage,
             t.DueDate,
             t.Properties
         )).ToList();
@@ -278,6 +280,7 @@ public sealed class PlansController : ControllerBase
                 t.Name,
                 t.Description,
                 t.Status,
+                t.ProgressPercentage,
                 t.DueDate,
                 t.Properties
             )).ToList();
@@ -326,11 +329,17 @@ public sealed class PlansController : ControllerBase
         var task = await _db.Tasks.Find(x => x.Id == taskId && x.PlanId == planId).FirstOrDefaultAsync();
         if (task is null) return NotFound("Task not found");
 
-        await _db.Tasks.UpdateOneAsync(
-            x => x.Id == taskId,
-            Builders<TaskEntity>.Update
-                .Set(x => x.Status, req.Status)
-                .Set(x => x.UpdatedAt, DateTimeOffset.UtcNow));
+        var update = Builders<TaskEntity>.Update
+            .Set(x => x.Status, req.Status)
+            .Set(x => x.UpdatedAt, DateTimeOffset.UtcNow);
+
+        if (req.ProgressPercentage.HasValue)
+        {
+            var pct = Math.Clamp(req.ProgressPercentage.Value, 0, 100);
+            update = update.Set(x => x.ProgressPercentage, pct);
+        }
+
+        await _db.Tasks.UpdateOneAsync(x => x.Id == taskId, update);
 
         // Update plan's updatedAt and progress
         await _db.Plans.UpdateOneAsync(
@@ -359,9 +368,14 @@ public sealed class PlansController : ControllerBase
         var plan = await _db.Plans.Find(x => x.Id == planId).FirstOrDefaultAsync();
         if (plan is null) return NotFound("Plan not found");
 
-        // Authorization: Only therapist can add tasks to a plan
-        if (plan.TherapistId != userId)
-            return Forbid("Only the assigned therapist can add tasks to a plan");
+        // Authorization: Only therapist or admin can add tasks to a plan
+        var isAdmin = User.Claims.Any(c => c.Type == ClaimTypes.Role && c.Value == "admin");
+        if (!isAdmin)
+        {
+            var therapist = await _db.Therapists.Find(x => x.UserId == userId).FirstOrDefaultAsync();
+            if (therapist is null || plan.TherapistId != therapist.Id)
+                return Forbid("Only the assigned therapist can add tasks to a plan");
+        }
 
         var taskEntity = _taskFactory.CreateTaskEntity(
             req.TaskType,
@@ -400,6 +414,7 @@ public sealed class PlansController : ControllerBase
             taskEntity.Name,
             taskEntity.Description,
             taskEntity.Status,
+            taskEntity.ProgressPercentage,
             taskEntity.DueDate,
             propertiesDict
         ));
@@ -417,9 +432,14 @@ public sealed class PlansController : ControllerBase
         var plan = await _db.Plans.Find(x => x.Id == planId).FirstOrDefaultAsync();
         if (plan is null) return NotFound("Plan not found");
 
-        // Authorization: Only therapist can delete tasks
-        if (plan.TherapistId != userId)
-            return Forbid("Only the assigned therapist can delete tasks from a plan");
+        // Authorization: Only therapist or admin can delete tasks
+        var isAdmin = User.Claims.Any(c => c.Type == ClaimTypes.Role && c.Value == "admin");
+        if (!isAdmin)
+        {
+            var therapist = await _db.Therapists.Find(x => x.UserId == userId).FirstOrDefaultAsync();
+            if (therapist is null || plan.TherapistId != therapist.Id)
+                return Forbid("Only the assigned therapist can delete tasks from a plan");
+        }
 
         var result = await _db.Tasks.DeleteOneAsync(x => x.Id == taskId && x.PlanId == planId);
         if (result.DeletedCount == 0)

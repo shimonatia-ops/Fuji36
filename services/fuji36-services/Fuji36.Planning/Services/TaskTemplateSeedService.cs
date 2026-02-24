@@ -660,9 +660,15 @@ public sealed class TaskTemplateSeedService : IHostedService
                     { "movementsEmphasized", new[] { "Forearm supination", "Wrist extension", "Elbow extension", "Shoulder flexion / adduction / abduction" } },
                     { "feasibilityNotes", "Requires detection of cones and stacking positions. Can be challenging depending on camera angle." },
                     { "analysisType", "cone_stacking" },
+                    { "goalMode", "repsInTime" },
+                    { "targetCones", 0 },
+                    { "targetReps", 0 },
                     { "analysisParameters", new Dictionary<string, object>
                         {
-                            { "timeLimit", 540 }
+                            { "goalMode", "repsInTime" },
+                            { "timeLimit", 300 },
+                            { "targetCones", 0 },
+                            { "targetReps", 0 }
                         }
                     }
                 },

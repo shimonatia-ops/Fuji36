@@ -12,6 +12,7 @@ public sealed class ShapingTask : ITask
     public string Name { get; }
     public string? Description { get; }
     public PlanningTaskStatus Status { get; set; }
+    public int ProgressPercentage { get; set; }
     public DateTimeOffset? DueDate { get; set; }
     public Dictionary<string, object> Properties { get; }
 
@@ -65,6 +66,7 @@ public sealed class ShapingTask : ITask
         Name = entity.Name;
         Description = entity.Description;
         Status = entity.Status;
+        ProgressPercentage = entity.ProgressPercentage;
         DueDate = entity.DueDate;
         Properties = BsonDocumentToDictionary(entity.Properties);
     }
@@ -75,6 +77,7 @@ public sealed class ShapingTask : ITask
         Name = name;
         Description = description;
         Status = PlanningTaskStatus.NotStarted;
+        ProgressPercentage = 0;
         Properties = properties;
     }
 

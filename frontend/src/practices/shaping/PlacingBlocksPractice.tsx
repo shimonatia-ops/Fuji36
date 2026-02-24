@@ -7,7 +7,8 @@ import '../../styles/App.css'
  * Task: Place small wooden blocks from the table to the top of a box
  * Focus: Pincer grasp, wrist extension, elbow extension, shoulder flexion
  */
-export default function PlacingBlocksPractice({ task, planId, onComplete, onProgress }: PracticeComponentProps) {
+export default function PlacingBlocksPractice({ task, planId, onComplete, onProgress, practiceMode = 'real' }: PracticeComponentProps) {
+  const isDraft = practiceMode === 'draft'
   const [isActive, setIsActive] = useState(false)
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
@@ -29,8 +30,8 @@ export default function PlacingBlocksPractice({ task, planId, onComplete, onProg
         const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000)
         setElapsedTime(elapsed)
         
-        // Update progress
-        if (onProgress) {
+        // Update progress (only in real mode)
+        if (onProgress && !isDraft) {
           const progress = Math.min(100, Math.round((blocksPlaced / targetBlocks) * 100))
           onProgress(task.taskId, progress)
         }
@@ -52,7 +53,7 @@ export default function PlacingBlocksPractice({ task, planId, onComplete, onProg
         clearInterval(intervalRef.current)
       }
     }
-  }, [isActive, startTime, blocksPlaced, targetBlocks, timeLimit, task.taskId, onProgress])
+  }, [isActive, startTime, blocksPlaced, targetBlocks, timeLimit, task.taskId, onProgress, isDraft])
 
   const handleStart = () => {
     setIsActive(true)
@@ -89,7 +90,7 @@ export default function PlacingBlocksPractice({ task, planId, onComplete, onProg
     setIsActive(false)
     setIsCompleted(true)
     
-    if (onComplete && startTime) {
+    if (onComplete && startTime && !isDraft) {
       const duration = Math.floor((Date.now() - startTime.getTime()) / 1000)
       const results: PracticeResults = {
         completed: true,
@@ -117,6 +118,11 @@ export default function PlacingBlocksPractice({ task, planId, onComplete, onProg
 
   return (
     <div className="practice-container placing-blocks-practice">
+      {isDraft && (
+        <div className="practice-draft-banner">
+          Preview mode – try the exercise to get an impression. Results are not saved.
+        </div>
+      )}
       <div className="practice-header">
         <h3>{task.name}</h3>
         {task.description && (

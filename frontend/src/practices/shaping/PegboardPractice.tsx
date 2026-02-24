@@ -7,7 +7,8 @@ import '../../styles/App.css'
  * Task: Lift a wooden peg and place it in a designated hole on the pegboard
  * Focus: Pincer grasp, wrist extension, elbow extension, shoulder flexion
  */
-export default function PegboardPractice({ task, planId, onComplete, onProgress }: PracticeComponentProps) {
+export default function PegboardPractice({ task, planId, onComplete, onProgress, practiceMode = 'real' }: PracticeComponentProps) {
+  const isDraft = practiceMode === 'draft'
   const [isActive, setIsActive] = useState(false)
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
@@ -30,7 +31,7 @@ export default function PegboardPractice({ task, planId, onComplete, onProgress 
         const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000)
         setElapsedTime(elapsed)
         
-        if (onProgress) {
+        if (onProgress && !isDraft) {
           const progress = Math.min(100, Math.round((pegsPlaced / targetPegs) * 100))
           onProgress(task.taskId, progress)
         }
@@ -51,7 +52,7 @@ export default function PegboardPractice({ task, planId, onComplete, onProgress 
         clearInterval(intervalRef.current)
       }
     }
-  }, [isActive, startTime, pegsPlaced, targetPegs, timeLimit, task.taskId, onProgress])
+  }, [isActive, startTime, pegsPlaced, targetPegs, timeLimit, task.taskId, onProgress, isDraft])
 
   const handleStart = () => {
     setIsActive(true)
@@ -80,7 +81,7 @@ export default function PegboardPractice({ task, planId, onComplete, onProgress 
     setIsActive(false)
     setIsCompleted(true)
     
-    if (onComplete && startTime) {
+    if (onComplete && startTime && !isDraft) {
       const duration = Math.floor((Date.now() - startTime.getTime()) / 1000)
       const results: PracticeResults = {
         completed: true,
@@ -108,6 +109,11 @@ export default function PegboardPractice({ task, planId, onComplete, onProgress 
 
   return (
     <div className="practice-container pegboard-practice">
+      {isDraft && (
+        <div className="practice-draft-banner">
+          Preview mode – try the exercise to get an impression. Results are not saved.
+        </div>
+      )}
       <div className="practice-header">
         <h3>{task.name}</h3>
         {task.description && (

@@ -65,8 +65,14 @@ export interface TaskResponse {
   name: string
   description: string | null
   status: number // TaskStatus enum
+  progressPercentage: number
   dueDate: string | null
   properties: Record<string, any> | null
+}
+
+export interface UpdateTaskStatusRequest {
+  status: number // TaskStatus enum
+  progressPercentage?: number
 }
 
 export interface PlanResponse {
@@ -270,6 +276,30 @@ class ApiClient {
   async getPlan(planId: string): Promise<PlanResponse> {
     return this.request<PlanResponse>(`/api/plans/${planId}`, {
       method: 'GET',
+    })
+  }
+
+  async addTaskToPlan(planId: string, task: CreateTaskRequest): Promise<TaskResponse> {
+    return this.request<TaskResponse>(`/api/plans/${planId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(task),
+    })
+  }
+
+  async deleteTaskFromPlan(planId: string, taskId: string): Promise<void> {
+    return this.request<void>(`/api/plans/${planId}/tasks/${taskId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async updateTaskStatus(
+    planId: string,
+    taskId: string,
+    req: UpdateTaskStatusRequest
+  ): Promise<void> {
+    return this.request<void>(`/api/plans/${planId}/tasks/${taskId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(req),
     })
   }
 }

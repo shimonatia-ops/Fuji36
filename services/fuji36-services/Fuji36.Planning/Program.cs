@@ -69,6 +69,7 @@ builder.Services.AddSingleton<ITaskFactory, PlanningTaskFactory>();
 builder.Services.AddSingleton<IPlanProgressService, PlanProgressService>();
 builder.Services.AddHostedService<PatientTherapistMigrationService>(); // Run migration on startup
 builder.Services.AddHostedService<PlanTaskMigrationService>(); // Migrate Plans and Tasks to GUIDs
+builder.Services.AddHostedService<TaskProgressMigrationService>(); // Set progressPercentage for existing tasks
 builder.Services.AddHostedService<TaskTemplateSeedService>(); // Seed task templates on startup
 
 var app = builder.Build();

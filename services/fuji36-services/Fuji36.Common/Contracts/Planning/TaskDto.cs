@@ -6,6 +6,7 @@ public sealed record TaskDto(
     string Name,
     string? Description,
     TaskStatus Status,
+    int ProgressPercentage,
     DateTimeOffset? DueDate,
     Dictionary<string, object>? Properties
 );

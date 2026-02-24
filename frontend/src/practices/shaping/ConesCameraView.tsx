@@ -36,6 +36,8 @@ interface ConesCameraViewProps {
   isActive: boolean
   prompt: string
   showDebug?: boolean
+  /** If true, debug panel is rendered elsewhere (e.g. right sidebar); hide it here */
+  hideDebugInCamera?: boolean
   /** If true, require user to click Start before init (avoids Strict Mode WASM conflict) */
   deferInit?: boolean
   /** If true, zones are draggable/resizable. Requires onZoneChange. */
@@ -57,6 +59,7 @@ export default function ConesCameraView({
   isActive,
   prompt,
   showDebug = false,
+  hideDebugInCamera = false,
   deferInit = true,
   zonesEditable = true,
   onZoneChange,
@@ -200,7 +203,7 @@ export default function ConesCameraView({
           </>
         )}
         <div className="cones-prompt-banner">{prompt}</div>
-        {showDebug && lastFeatures && (
+        {showDebug && !hideDebugInCamera && lastFeatures && (
           <div className="cones-debug-panel">
             <div>Pose: {lastFeatures.poseOk ? 'OK' : '—'}</div>
             <div>Hand: {lastFeatures.handOk ? 'OK' : '—'}</div>

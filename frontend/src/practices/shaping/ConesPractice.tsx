@@ -79,7 +79,8 @@ function getCoachPrompt(
   }
 }
 
-export default function ConesPractice({ task, onComplete, onProgress }: PracticeComponentProps) {
+export default function ConesPractice({ task, planName, taskName, onComplete, onProgress, practiceMode = 'real', onBackToPlan }: PracticeComponentProps) {
+  const isDraft = practiceMode === 'draft'
   const [exerciseState, setExerciseState] = useState<ExerciseState>('SETUP_ALIGNMENT')
   const [alignmentOkFrames, setAlignmentOkFrames] = useState(0)
   const [, setRepState] = useState<string>('WAIT_PICKUP')
@@ -91,17 +92,20 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
   const [lastFeatures, setLastFeatures] = useState<any>(null)
   const [showDebug, setShowDebug] = useState(true)
 
-  const timeLimit = (task.properties?.analysisParameters?.timeLimit as number) || 300
-  const targetCones = (task.properties?.targetCones as number) || (task.properties?.targetReps as number) || 10
+  const analysisParams = task.properties?.analysisParameters as Record<string, unknown> | undefined
+  const timeLimit = (task.properties?.timeLimit as number) ?? (analysisParams?.timeLimit as number) ?? 300
+  const goalMode = (task.properties?.goalMode as string) ?? (analysisParams?.goalMode as string) ?? 'repsInTime'
+  const targetCones = (task.properties?.targetCones as number) ?? (task.properties?.targetReps as number) ?? (analysisParams?.targetCones as number) ?? (analysisParams?.targetReps as number) ?? 0
   const preferredHand = ((task.properties?.preferredHand as string) || 'Right').toLowerCase()
   const handToUse = (preferredHand === 'left' ? 'Left' : 'Right') as 'Left' | 'Right'
-  const mode: 'Timed' | 'TargetReps' = targetCones > 0 ? 'TargetReps' : 'Timed'
+  const mode: 'Timed' | 'TargetReps' = goalMode === 'timeToComplete' || targetCones > 0 ? 'TargetReps' : 'Timed'
+  const effectiveTargetCones = mode === 'TargetReps' ? (targetCones || 10) : 0
 
   const config: ExerciseConfig = {
     handToUse,
     mode,
     durationSec: timeLimit,
-    targetReps: targetCones || 10,
+    targetReps: effectiveTargetCones,
     startZone: startZone || { x1: 0.1, y1: 0.55, x2: 0.35, y2: 0.9 },
     endZone: endZone || { x1: 0.6, y1: 0.55, x2: 0.9, y2: 0.9 },
     minPoseConfidence: DEFAULT_CONFIG.minPoseConfidence,
@@ -124,7 +128,7 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
       handToUse,
       mode,
       timeLimit,
-      targetCones || 10
+      effectiveTargetCones
     )
 
     stateMachineRef.current.setOnStateChange((s) => {
@@ -168,9 +172,9 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
     stateMachineRef.current.setOnRepCounted(() => {
       metricsRef.current?.recordRepComplete()
       setRepCount((c) => c + 1)
-      if (onProgress) {
+      if (onProgress && !isDraft) {
         const pct = mode === 'TargetReps'
-          ? Math.min(100, (repCount + 1) / (targetCones || 10) * 100)
+          ? Math.min(100, (repCount + 1) / effectiveTargetCones * 100)
           : Math.min(100, (elapsedSec / timeLimit) * 100)
         onProgress(task.taskId, pct)
       }
@@ -180,7 +184,7 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
       if (timerRef.current) clearInterval(timerRef.current)
       if (countdownRef.current) clearInterval(countdownRef.current)
     }
-  }, [task.taskId])
+  }, [task.taskId, isDraft])
 
   const handleFrame = useCallback(
     (features: any) => {
@@ -244,11 +248,11 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
   const handleStop = useCallback(() => {
     stateMachineRef.current?.dispatch({ type: 'USER_STOP' })
     const summary = metricsRef.current?.getSummary()
-    if (onComplete && summary) {
+    if (onComplete && summary && !isDraft) {
       const results: PracticeResults = {
         completed: true,
         score: mode === 'TargetReps'
-          ? Math.round((repCount / (targetCones || 10)) * 100)
+          ? Math.round((repCount / effectiveTargetCones) * 100)
           : Math.round((elapsedSec / timeLimit) * 100),
         duration: Math.round(summary.durationSec),
         repetitions: repCount,
@@ -256,7 +260,7 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
       }
       onComplete(task.taskId, results)
     }
-  }, [onComplete, task.taskId, repCount, elapsedSec, mode, targetCones, timeLimit])
+  }, [onComplete, task.taskId, repCount, elapsedSec, mode, effectiveTargetCones, timeLimit, isDraft])
 
   useEffect(() => {
     if (exerciseState === 'SETUP_ZONES') {
@@ -283,11 +287,11 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
   useEffect(() => {
     if (exerciseState === 'COMPLETED') {
       const summary = metricsRef.current?.getSummary()
-      if (onComplete && summary) {
+      if (onComplete && summary && !isDraft) {
         const results: PracticeResults = {
           completed: true,
           score: mode === 'TargetReps'
-            ? Math.round((repCount / (targetCones || 10)) * 100)
+            ? Math.round((repCount / effectiveTargetCones) * 100)
             : Math.round((elapsedSec / timeLimit) * 100),
           duration: Math.round(summary.durationSec),
           repetitions: repCount,
@@ -296,7 +300,7 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
         onComplete(task.taskId, results)
       }
     }
-  }, [exerciseState, onComplete, task.taskId, repCount, elapsedSec, mode, targetCones, timeLimit])
+  }, [exerciseState, onComplete, task.taskId, repCount, elapsedSec, mode, effectiveTargetCones, timeLimit, isDraft])
 
   const prompt = getCoachPrompt(
     exerciseState,
@@ -313,15 +317,43 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
 
   return (
     <div className="practice-session-layout">
-      {/* Left - GOAL */}
-      <div className="practice-side-panel practice-goal-panel">
-        <div className="practice-panel-title">GOAL</div>
+      {/* Header: Plan + Task name */}
+      <div className="practice-session-header-bar">
+        <div className="practice-session-header-content">
+          <div>
+            <h1 className="practice-session-plan-name">{planName ?? 'Unnamed Plan'}</h1>
+            <p className="practice-session-task-name">{taskName ?? task.name}</p>
+          </div>
+          {onBackToPlan && (
+            <button type="button" className="practice-back-to-plan-btn" onClick={onBackToPlan}>
+              ← Back to Plan
+            </button>
+          )}
+        </div>
+      </div>
+      {isDraft && (
+        <div className="practice-draft-banner">
+          Preview mode – try the exercise to get an impression. Results are not saved.
+        </div>
+      )}
+      {/* Left - Task Details */}
+      <div className="practice-side-panel practice-task-details-panel">
         <div className="practice-goal-content">
+          <div className="practice-goal-item">
+            <div className="practice-goal-label">Goal Mode</div>
+            <div className="practice-goal-value">
+              {mode === 'TargetReps' ? 'Time to Complete' : 'Repetitions in Time'}
+            </div>
+          </div>
           <div className="practice-goal-item">
             <div className="practice-goal-label">Target</div>
             <div className="practice-goal-value">
-              {mode === 'TargetReps' ? `${targetCones} Cones` : formatTime(timeLimit)}
+              {mode === 'TargetReps' ? `${effectiveTargetCones} Cones` : formatTime(timeLimit)}
             </div>
+          </div>
+          <div className="practice-goal-item">
+            <div className="practice-goal-label">Time Limit</div>
+            <div className="practice-goal-value">{formatTime(timeLimit)}</div>
           </div>
           <div className="practice-goal-item">
             <div className="practice-goal-label">Hand</div>
@@ -361,6 +393,7 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
               isActive={true}
               prompt={prompt}
               showDebug={showDebug}
+              hideDebugInCamera={true}
               zonesEditable={exerciseState === 'SETUP_ZONES'}
               onZoneChange={handleZoneChange}
               deferInit={false}
@@ -432,12 +465,6 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
                     </button>
                   </div>
                 )}
-                <button
-                  className="cones-debug-toggle"
-                  onClick={() => setShowDebug((d) => !d)}
-                >
-                  {showDebug ? 'Hide Debug' : 'Debug'}
-                </button>
               </>
             )}
           </div>
@@ -451,7 +478,7 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
               <div className="practice-completed-stat">
                 <span className="stat-label">Cones:</span>
                 <span className="stat-value">
-                  {repCount} / {targetCones}
+                  {mode === 'TargetReps' ? `${repCount} / ${effectiveTargetCones}` : repCount}
                 </span>
               </div>
               <div className="practice-completed-stat">
@@ -463,7 +490,7 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
                 <span className="stat-value">
                   {Math.round(
                     (mode === 'TargetReps'
-                      ? (repCount / (targetCones || 10)) * 100
+                      ? (effectiveTargetCones > 0 ? (repCount / effectiveTargetCones) * 100 : 0)
                       : (elapsedSec / timeLimit) * 100
                     )
                   )}
@@ -475,54 +502,95 @@ export default function ConesPractice({ task, onComplete, onProgress }: Practice
         )}
       </div>
 
-      {/* Right - PROGRESS */}
-      <div className="practice-side-panel practice-progress-panel">
-        <div className="practice-panel-title">PROGRESS</div>
-        <div className="practice-progress-content">
-          <div className="practice-progress-item">
-            <div className="practice-progress-label">Reps</div>
-            <div className="practice-progress-value">
-              {repCount} / {targetCones}
-            </div>
-          </div>
-          <div className="practice-progress-item">
-            <div className="practice-progress-label">Progress</div>
-            <div className="practice-progress-percentage">
-              {Math.round(
-                (mode === 'TargetReps'
-                  ? (repCount / (targetCones || 10)) * 100
-                  : (elapsedSec / timeLimit) * 100)
-              )}
-              %
-            </div>
-            <div className="practice-progress-bar-mini">
-              <div
-                className="practice-progress-bar-fill"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    mode === 'TargetReps'
-                      ? (repCount / (targetCones || 10)) * 100
-                      : (elapsedSec / timeLimit) * 100
-                  )}%`
-                }}
-              />
-            </div>
-          </div>
-          {(exerciseState === 'ACTIVE' || exerciseState === 'PAUSED') && (
-            <>
-              <div className="practice-progress-item">
-                <div className="practice-progress-label">Elapsed</div>
-                <div className="practice-progress-value">{formatTime(elapsedSec)}</div>
-              </div>
-              <div className="practice-progress-item">
-                <div className="practice-progress-label">Remaining</div>
-                <div className="practice-progress-value">
-                  {formatTime(Math.max(0, timeLimit - elapsedSec))}
+      {/* Right - Feedback + Progress (unified) */}
+      <div className="practice-side-panel practice-right-panel">
+        <div className="practice-right-content">
+          {/* Feedback */}
+          <div className="practice-right-block">
+            <div className="practice-right-block-title">FEEDBACK</div>
+            {showDebug && lastFeatures ? (
+              <div className="practice-right-items">
+                <div className="practice-right-item">
+                  <span className="practice-right-label">Pose</span>
+                  <span className={lastFeatures.poseOk ? 'practice-right-ok' : 'practice-right-wait'}>{lastFeatures.poseOk ? 'OK' : 'Adjust'}</span>
+                </div>
+                <div className="practice-right-item">
+                  <span className="practice-right-label">Hand visible</span>
+                  <span className={lastFeatures.handOk ? 'practice-right-ok' : 'practice-right-wait'}>{lastFeatures.handOk ? 'OK' : 'Show'}</span>
+                </div>
+                <div className="practice-right-item">
+                  <span className="practice-right-label">Holding cone</span>
+                  <span className={lastFeatures.grip ? 'practice-right-ok' : 'practice-right-wait'}>{lastFeatures.grip ? 'Yes' : 'No'}</span>
+                </div>
+                <div className="practice-right-item">
+                  <span className="practice-right-label">Start zone</span>
+                  <span className={lastFeatures.inStartZone ? 'practice-right-ok' : 'practice-right-wait'}>{lastFeatures.inStartZone ? 'Yes' : 'No'}</span>
+                </div>
+                <div className="practice-right-item">
+                  <span className="practice-right-label">End zone</span>
+                  <span className={lastFeatures.inEndZone ? 'practice-right-ok' : 'practice-right-wait'}>{lastFeatures.inEndZone ? 'Yes' : 'No'}</span>
+                </div>
+                <div className="practice-right-item">
+                  <span className="practice-right-label">Elbow</span>
+                  <span className="practice-right-value">{lastFeatures.angles.elbowAngleDeg.toFixed(0)}°</span>
                 </div>
               </div>
-            </>
-          )}
+            ) : (
+              <p className="practice-right-placeholder">Feedback appears when camera is active.</p>
+            )}
+            {(exerciseState === 'ACTIVE' || exerciseState === 'PAUSED') && (
+              <button className="practice-right-toggle" onClick={() => setShowDebug((d) => !d)}>
+                {showDebug ? 'Hide feedback' : 'Show feedback'}
+              </button>
+            )}
+          </div>
+          {/* Progress */}
+          <div className="practice-right-block">
+            <div className="practice-right-block-title">PROGRESS</div>
+            <div className="practice-right-items">
+              <div className="practice-right-item">
+                <span className="practice-right-label">Reps</span>
+                <span className="practice-right-value">
+                  {mode === 'TargetReps' ? `${repCount} / ${effectiveTargetCones}` : repCount}
+                </span>
+              </div>
+              <div className="practice-right-item">
+                <span className="practice-right-label">Progress</span>
+                <span className="practice-right-value">
+                  {Math.round(
+                    (mode === 'TargetReps'
+                      ? (effectiveTargetCones > 0 ? (repCount / effectiveTargetCones) * 100 : 0)
+                      : (elapsedSec / timeLimit) * 100)
+                  )}%
+                </span>
+              </div>
+              <div className="practice-right-bar">
+                <div
+                  className="practice-right-bar-fill"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      mode === 'TargetReps'
+                        ? (effectiveTargetCones > 0 ? (repCount / effectiveTargetCones) * 100 : 0)
+                        : (elapsedSec / timeLimit) * 100
+                    )}%`
+                  }}
+                />
+              </div>
+              {(exerciseState === 'ACTIVE' || exerciseState === 'PAUSED') && (
+                <>
+                  <div className="practice-right-item">
+                    <span className="practice-right-label">Elapsed</span>
+                    <span className="practice-right-value">{formatTime(elapsedSec)}</span>
+                  </div>
+                  <div className="practice-right-item">
+                    <span className="practice-right-label">Remaining</span>
+                    <span className="practice-right-value">{formatTime(Math.max(0, timeLimit - elapsedSec))}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

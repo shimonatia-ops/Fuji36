@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import '../../styles/App.css'
 import { useAuth } from '../../context/AuthContext'
 import { useLanguage } from '../../context/LanguageContext'
+import { useTheme } from '../../context/ThemeContext'
 import Avatar from '../common/Avatar'
 
 type LayoutProps = {
@@ -13,6 +14,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
   const { isAuthenticated, role, name, firstName, lastName, email, avatarUrl, logout } = useAuth()
   const { language, setLanguage, t, isRTL } = useLanguage()
+  const { theme, toggleTheme } = useTheme()
   const [showDropdown, setShowDropdown] = useState(false)
   const [showLanguageMenu, setShowLanguageMenu] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -53,7 +55,8 @@ export default function Layout({ children }: LayoutProps) {
       <header className="fuji36-header">
         <div className="fuji36-header-inner">
           <div className="fuji36-logo" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
-            Fuji36
+            <img src="/favicon-v4.png" alt="Fuji36" className="fuji36-logo-icon" />
+            <span>fuji36</span>
           </div>
           <nav className="fuji36-nav">
             <Link to="/solutions">{t('nav.solutions')}</Link>
@@ -69,6 +72,24 @@ export default function Layout({ children }: LayoutProps) {
             )}
           </nav>
           <div className="fuji36-header-cta">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="theme-toggle-button"
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            >
+              {theme === 'dark' ? (
+                <svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="5" />
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
+              ) : (
+                <svg className="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
+            </button>
             <div className="language-selector-wrapper" ref={languageMenuRef}>
               <button
                 className="language-selector-button"

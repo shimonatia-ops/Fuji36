@@ -3,19 +3,30 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiClient, type PatientResponse, type PlanResponse, type TherapistResponse, type TaskTemplateResponse, taskTypeToString, planFrequencyToString } from '../services/api'
 import Avatar from '../components/common/Avatar'
+import TherapistDashboard from '../components/dashboard/TherapistDashboard'
 import '../styles/App.css'
 
 type ViewMode = 'dashboard' | 'patient'
 
 export default function TherapistCareBoardPage() {
-  const { isAuthenticated, role, userId } = useAuth()
+  const { isAuthenticated, role, userId, name: therapistName, firstName, lastName, email, avatarUrl } = useAuth()
   const [, setTherapist] = useState<TherapistResponse | null>(null)
   const [patients, setPatients] = useState<PatientResponse[]>([])
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
   const [plans, setPlans] = useState<PlanResponse[]>([])
   const [viewMode, setViewMode] = useState<ViewMode>('dashboard')
+  const [isSideNavCollapsed, setIsSideNavCollapsed] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth < 968) setIsSideNavCollapsed(false)
+    }
+    window.addEventListener('resize', onResize)
+    onResize()
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   useEffect(() => {
     const loadData = async () => {
@@ -119,59 +130,90 @@ export default function TherapistCareBoardPage() {
   return (
     <div className="therapist-page">
       {/* Side Navigation */}
-      <aside className="therapist-side-nav">
-        <div className="therapist-side-nav-header">
-          <h2>Therapist Workspace</h2>
+      <aside className={`therapist-side-nav ${isSideNavCollapsed ? 'therapist-side-nav-collapsed' : ''}`}>
+        <div className="therapist-side-nav-profile">
+          <div className="therapist-side-nav-profile-main">
+            <Avatar
+              firstName={firstName}
+              lastName={lastName}
+              email={email}
+              avatarUrl={avatarUrl}
+              size="medium"
+              className="therapist-profile-avatar"
+            />
+            {!isSideNavCollapsed && (
+              <div className="therapist-side-nav-profile-info">
+                <span className="therapist-profile-role">THERAPIST</span>
+                <span className="therapist-profile-name">{therapistName || 'Therapist'}</span>
+              </div>
+            )}
+            <button
+              type="button"
+              className="therapist-side-nav-toggle"
+              onClick={() => setIsSideNavCollapsed(!isSideNavCollapsed)}
+              aria-label={isSideNavCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={isSideNavCollapsed ? 'Expand' : 'Collapse'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d={isSideNavCollapsed ? 'M9 18l6-6-6-6' : 'M15 18l-6-6 6-6'} />
+              </svg>
+            </button>
+          </div>
         </div>
         <nav className="therapist-side-nav-menu">
-          <button
-            className={`therapist-nav-item ${viewMode === 'dashboard' ? 'active' : ''}`}
-            onClick={handleDashboardClick}
-          >
-            <span className="therapist-nav-icon">📊</span>
-            <span>Manage All My Patients</span>
-          </button>
-          <div className="therapist-nav-divider"></div>
           <div className="therapist-nav-section">
-            <div className="therapist-nav-section-title">Patients</div>
+            {!isSideNavCollapsed && <div className="therapist-nav-section-title">Main</div>}
+            <div className="therapist-nav-item-wrapper">
+              <button
+                className={`therapist-nav-item ${viewMode === 'dashboard' ? 'active' : ''}`}
+                onClick={handleDashboardClick}
+                title="Dashboard"
+              >
+                <span className="therapist-nav-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 3v18h18" />
+                    <path d="M18 17V9" />
+                    <path d="M13 17V5" />
+                    <path d="M8 17v-3" />
+                  </svg>
+                </span>
+                {!isSideNavCollapsed && <span className="therapist-nav-text">Dashboard</span>}
+              </button>
+            </div>
+            <div className="therapist-nav-section-title-spacer" />
+            {!isSideNavCollapsed && <div className="therapist-nav-section-title">Patients</div>}
             {patients.length === 0 ? (
-              <div className="therapist-nav-empty">No patients assigned</div>
+              !isSideNavCollapsed && (
+                <div className="therapist-nav-empty">No patients assigned</div>
+              )
             ) : (
               patients.map((patient) => {
-                // Debug: Log patient data
-                if (!patient.firstName && !patient.lastName) {
-                  console.log('Patient missing name data:', patient)
-                }
-                
                 const displayName = [patient.firstName, patient.lastName]
                   .filter(Boolean)
                   .join(' ') || (patient.userExternalId || patient.userId)
-                
-                // Show: FirstName LastName (userExternalId) or just userExternalId/userId if no name
                 const userIdToShow = patient.userExternalId || patient.userId
                 const fullDisplay = displayName !== userIdToShow 
                   ? `${displayName} (${userIdToShow})`
                   : userIdToShow
-                
+                const isActive = viewMode === 'patient' && selectedPatientId === patient.patientId
                 return (
-                  <button
-                    key={patient.patientId}
-                    className={`therapist-nav-item ${
-                      viewMode === 'patient' && selectedPatientId === patient.patientId ? 'active' : ''
-                    }`}
-                    onClick={() => handlePatientSelect(patient.patientId)}
-                    title={`Patient ID: ${patient.patientId}, User ID: ${patient.userId}, External ID: ${patient.userExternalId || 'N/A'}`}
-                  >
-                    <Avatar
-                      firstName={patient.firstName}
-                      lastName={patient.lastName}
-                      email={patient.userExternalId || patient.userId}
-                      avatarUrl={patient.avatarUrl}
-                      size="small"
-                      className="therapist-nav-avatar"
-                    />
-                    <span className="therapist-nav-text">{fullDisplay}</span>
-                  </button>
+                  <div key={patient.patientId} className="therapist-nav-item-wrapper">
+                    <button
+                      className={`therapist-nav-item therapist-nav-item-patient ${isActive ? 'active' : ''}`}
+                      onClick={() => handlePatientSelect(patient.patientId)}
+                      title={fullDisplay}
+                    >
+                      <Avatar
+                        firstName={patient.firstName}
+                        lastName={patient.lastName}
+                        email={patient.userExternalId || patient.userId}
+                        avatarUrl={patient.avatarUrl}
+                        size="small"
+                        className="therapist-nav-avatar"
+                      />
+                      {!isSideNavCollapsed && <span className="therapist-nav-text">{fullDisplay}</span>}
+                    </button>
+                  </div>
                 )
               })
             )}
@@ -190,24 +232,10 @@ export default function TherapistCareBoardPage() {
             <p>{error}</p>
           </div>
         ) : viewMode === 'dashboard' ? (
-          <div className="therapist-dashboard">
-            <h1>Manage All My Patients</h1>
-            <p className="section-intro">
-              Overview of all your patients. This dashboard will show aggregated statistics and quick actions.
-            </p>
-            <div className="therapist-dashboard-stats">
-              <div className="therapist-stat-card">
-                <div className="therapist-stat-number">{patients.length}</div>
-                <div className="therapist-stat-label">Total Patients</div>
-              </div>
-              <div className="therapist-stat-card">
-                <div className="therapist-stat-number">
-                  {plans.reduce((sum, p) => sum + p.tasks.length, 0)}
-                </div>
-                <div className="therapist-stat-label">Total Tasks</div>
-              </div>
-            </div>
-          </div>
+          <TherapistDashboard
+            patientCount={patients.length}
+            totalTasks={plans.reduce((sum, p) => sum + p.tasks.length, 0)}
+          />
         ) : selectedPatient ? (
           <PatientKanbanBoard
             patient={selectedPatient}
@@ -256,11 +284,17 @@ function PatientKanbanBoard({ patient, plans, onPlansUpdate }: PatientKanbanBoar
   }])
   const [isCreating, setIsCreating] = useState(false)
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set())
+  const [selectedPlanForView, setSelectedPlanForView] = useState<PlanResponse | null>(null)
+  const [showAddTaskForm, setShowAddTaskForm] = useState(false)
+  const [addTaskTemplateId, setAddTaskTemplateId] = useState<string>('')
+  const [addTaskName, setAddTaskName] = useState('')
+  const [isAddingTask, setIsAddingTask] = useState(false)
+  const [isDeletingTaskId, setIsDeletingTaskId] = useState<string | null>(null)
 
-  // Load task templates when form is shown
+  // Load task templates when form or plan modal is shown
   useEffect(() => {
     const loadTemplates = async () => {
-      if (showCreatePlan && taskTemplates.length === 0) {
+      if ((showCreatePlan || selectedPlanForView) && taskTemplates.length === 0) {
         try {
           setIsLoadingTemplates(true)
           const templates = await apiClient.getTaskTemplates(1, true) // Get active ShapingTask templates
@@ -274,7 +308,7 @@ function PatientKanbanBoard({ patient, plans, onPlansUpdate }: PatientKanbanBoar
     }
 
     loadTemplates()
-  }, [showCreatePlan, taskTemplates.length])
+  }, [showCreatePlan, selectedPlanForView, taskTemplates.length])
 
   // Group plans by status for kanban columns
   // Note: Backend returns status as string enum values ("Active", "Draft", "Completed")
@@ -345,6 +379,27 @@ function PatientKanbanBoard({ patient, plans, onPlansUpdate }: PatientKanbanBoar
     updated[index].properties = {
       ...updated[index].properties,
       [propertyKey]: value
+    }
+    setNewPlanTasks(updated)
+  }
+
+  const handleConesGoalModeChange = (index: number, goalMode: 'repsInTime' | 'timeToComplete') => {
+    const updated = [...newPlanTasks]
+    if (!updated[index].properties) {
+      updated[index].properties = {}
+    }
+    updated[index].properties = {
+      ...updated[index].properties,
+      goalMode,
+      targetCones: goalMode === 'timeToComplete' ? (updated[index].properties?.targetCones ?? 10) : 0,
+      targetReps: goalMode === 'timeToComplete' ? (updated[index].properties?.targetReps ?? 10) : 0
+    }
+    const ap = updated[index].properties?.analysisParameters as Record<string, unknown> | undefined
+    if (ap && typeof ap === 'object') {
+      updated[index].properties = {
+        ...updated[index].properties,
+        analysisParameters: { ...ap, goalMode, targetCones: goalMode === 'timeToComplete' ? (ap.targetCones ?? 10) : 0, targetReps: goalMode === 'timeToComplete' ? (ap.targetReps ?? 10) : 0 }
+      }
     }
     setNewPlanTasks(updated)
   }
@@ -432,24 +487,92 @@ function PatientKanbanBoard({ patient, plans, onPlansUpdate }: PatientKanbanBoar
     })
   }
 
-  const getTaskStatusName = (status: number): string => {
-    switch (status) {
-      case 0: return 'Not Started'
-      case 1: return 'In Progress'
-      case 2: return 'Completed'
-      case 3: return 'Skipped'
-      default: return 'Unknown'
+  const [editingTaskProgress, setEditingTaskProgress] = useState<Record<string, number>>({})
+  const handleUpdateTaskProgress = async (planId: string, taskId: string, progressPercentage: number, status: number) => {
+    try {
+      await apiClient.updateTaskStatus(planId, taskId, { status, progressPercentage })
+      setEditingTaskProgress(prev => {
+        const next = { ...prev }
+        delete next[taskId]
+        return next
+      })
+      const updatedPlan = await apiClient.getPlan(planId)
+      setSelectedPlanForView(updatedPlan)
+      onPlansUpdate()
+    } catch (err) {
+      console.error('Failed to update task progress:', err)
+      alert(err instanceof Error ? err.message : 'Failed to update task progress')
     }
   }
 
-  const getTaskStatusColor = (status: number): string => {
-    switch (status) {
-      case 0: return '#94a3b8' // gray - not started
-      case 1: return '#3b82f6' // blue - in progress
-      case 2: return '#10b981' // green - completed
-      case 3: return '#f59e0b' // amber - skipped
-      default: return '#64748b'
+  const handleRemoveTaskFromPlan = async (planId: string, taskId: string) => {
+    if (!selectedPlanForView) return
+    try {
+      setIsDeletingTaskId(taskId)
+      await apiClient.deleteTaskFromPlan(planId, taskId)
+      const updatedPlan = await apiClient.getPlan(planId)
+      setSelectedPlanForView(updatedPlan)
+      onPlansUpdate()
+    } catch (err) {
+      console.error('Failed to remove task:', err)
+      alert(err instanceof Error ? err.message : 'Failed to remove task')
+    } finally {
+      setIsDeletingTaskId(null)
     }
+  }
+
+  const handleAddTaskToPlan = async () => {
+    if (!selectedPlanForView || !addTaskTemplateId || !addTaskName.trim()) {
+      alert('Please select a template and enter a task name')
+      return
+    }
+    const template = taskTemplates.find(t => t.templateId === addTaskTemplateId)
+    if (!template) return
+    try {
+      setIsAddingTask(true)
+      await apiClient.addTaskToPlan(selectedPlanForView.planId, {
+        taskType: taskTypeToString(template.taskType),
+        name: addTaskName.trim(),
+        description: template.description || null,
+        dueDate: null,
+        properties: template.properties ? { ...template.properties } : null
+      })
+      const updatedPlan = await apiClient.getPlan(selectedPlanForView.planId)
+      setSelectedPlanForView(updatedPlan)
+      setShowAddTaskForm(false)
+      setAddTaskTemplateId('')
+      setAddTaskName('')
+      onPlansUpdate()
+    } catch (err) {
+      console.error('Failed to add task:', err)
+      alert(err instanceof Error ? err.message : 'Failed to add task')
+    } finally {
+      setIsAddingTask(false)
+    }
+  }
+
+  const getTaskStatusName = (status: number | string): string => {
+    const s = status === 0 || status === '0' || status === 'NotStarted' ? 'NotStarted' :
+              status === 1 || status === '1' || status === 'InProgress' ? 'InProgress' :
+              status === 2 || status === '2' || status === 'Completed' ? 'Completed' :
+              status === 3 || status === '3' || status === 'Skipped' ? 'Skipped' : null
+    if (s === 'NotStarted') return 'Not Started'
+    if (s === 'InProgress') return 'In Progress'
+    if (s === 'Completed') return 'Completed'
+    if (s === 'Skipped') return 'Skipped'
+    return 'Not Started'
+  }
+
+  const getTaskStatusColor = (status: number | string): string => {
+    const s = status === 0 || status === '0' || status === 'NotStarted' ? 'NotStarted' :
+              status === 1 || status === '1' || status === 'InProgress' ? 'InProgress' :
+              status === 2 || status === '2' || status === 'Completed' ? 'Completed' :
+              status === 3 || status === '3' || status === 'Skipped' ? 'Skipped' : null
+    if (s === 'NotStarted') return '#94a3b8'
+    if (s === 'InProgress') return '#3b82f6'
+    if (s === 'Completed') return '#10b981'
+    if (s === 'Skipped') return '#f59e0b'
+    return '#94a3b8'
   }
 
   return (
@@ -607,11 +730,33 @@ function PatientKanbanBoard({ patient, plans, onPlansUpdate }: PatientKanbanBoar
                         />
                       </div>
 
+                      {/* Cones-specific: Goal Mode */}
+                      {(task.properties?.displayName === 'Cones' || task.properties?.analysisType === 'cone_stacking') && (
+                        <div className="form-group-inline cones-goal-mode">
+                          <label>Goal Mode</label>
+                          <select
+                            value={(task.properties?.goalMode as string) ?? (task.properties?.analysisParameters as Record<string, unknown>)?.goalMode ?? 'repsInTime'}
+                            onChange={(e) => handleConesGoalModeChange(index, e.target.value as 'repsInTime' | 'timeToComplete')}
+                          >
+                            <option value="repsInTime">Repetitions in Time (how many cones in X minutes)</option>
+                            <option value="timeToComplete">Time to Complete (how long to move T cones)</option>
+                          </select>
+                        </div>
+                      )}
+
                       {/* Editable Properties */}
                       {task.properties && Object.keys(task.properties).length > 0 && (
                         <div className="task-properties-section">
                           <label className="task-properties-label">Task Parameters (Editable)</label>
                           {Object.entries(task.properties).map(([key, value]) => {
+                            // Skip goalMode for Cones - we have a dedicated dropdown above
+                            if ((task.properties?.displayName === 'Cones' || task.properties?.analysisType === 'cone_stacking') && key === 'goalMode') {
+                              return null
+                            }
+                            // Skip internal/template-only fields from the form
+                            if (['taskNumber', 'displayName', 'movementsEmphasized', 'feasibilityNotes'].includes(key)) {
+                              return null
+                            }
                             // Skip complex nested objects for now, focus on simple properties
                             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                               return null
@@ -780,6 +925,15 @@ function PatientKanbanBoard({ patient, plans, onPlansUpdate }: PatientKanbanBoar
                                   {task.description && (
                                     <p className="kanban-task-description">{task.description}</p>
                                   )}
+                                  <div className="kanban-task-progress-mini">
+                                    <div className="kanban-task-progress-bar">
+                                      <div
+                                        className="kanban-task-progress-fill"
+                                        style={{ width: `${task.progressPercentage ?? 0}%` }}
+                                      />
+                                    </div>
+                                    <span>{task.progressPercentage ?? 0}%</span>
+                                  </div>
                                   {task.dueDate && (
                                     <div className="kanban-task-due">
                                       Due: {new Date(task.dueDate).toLocaleDateString()}
@@ -795,10 +949,7 @@ function PatientKanbanBoard({ patient, plans, onPlansUpdate }: PatientKanbanBoar
                       <div className="kanban-card-footer">
                         <button
                           className="kanban-card-action-btn"
-                          onClick={() => {
-                            // TODO: Navigate to plan detail or edit
-                            console.log('View plan:', plan.planId)
-                          }}
+                          onClick={() => setSelectedPlanForView(plan)}
                         >
                           View Details
                         </button>
@@ -811,6 +962,190 @@ function PatientKanbanBoard({ patient, plans, onPlansUpdate }: PatientKanbanBoar
           )
         })}
       </div>
+
+      {/* Plan Detail Modal */}
+      {selectedPlanForView && (
+        <div
+          className="patient-plan-modal-overlay"
+          onClick={() => {
+            setSelectedPlanForView(null)
+            setShowAddTaskForm(false)
+          }}
+        >
+          <div className="patient-plan-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="patient-plan-modal-header">
+              <h2>{selectedPlanForView.planName || 'Plan Details'}</h2>
+              <button
+                className="patient-plan-modal-close"
+                onClick={() => {
+                  setSelectedPlanForView(null)
+                  setShowAddTaskForm(false)
+                }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="patient-plan-modal-content">
+              {selectedPlanForView.description && (
+                <div className="patient-plan-info-card">
+                  <h3>Description</h3>
+                  <p>{selectedPlanForView.description}</p>
+                </div>
+              )}
+              <div className="patient-plan-info-card">
+                <h3>Progress</h3>
+                <div className="patient-plan-progress-container">
+                  <div className="patient-plan-progress-bar">
+                    <div
+                      className="patient-plan-progress-fill"
+                      style={{
+                        width: `${selectedPlanForView.progressPercentage}%`,
+                        backgroundColor: getProgressColor(selectedPlanForView.progressPercentage),
+                      }}
+                    />
+                  </div>
+                  <span className="patient-plan-progress-text">
+                    {selectedPlanForView.progressPercentage}%
+                  </span>
+                </div>
+              </div>
+              <div className="patient-plan-info-card">
+                <h3>Status</h3>
+                <span className={`plan-status status-${String(selectedPlanForView.status).toLowerCase()}`}>
+                  {String(selectedPlanForView.status)}
+                </span>
+              </div>
+              {selectedPlanForView.goals.length > 0 && (
+                <div className="patient-plan-info-card">
+                  <h3>Goals</h3>
+                  <ul className="patient-plan-goals-list">
+                    {selectedPlanForView.goals.map((goal, idx) => (
+                      <li key={idx}>{goal}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="patient-plan-info-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ margin: 0 }}>Tasks ({selectedPlanForView.tasks.length})</h3>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => setShowAddTaskForm(true)}
+                  >
+                    + Add Task
+                  </button>
+                </div>
+                {showAddTaskForm && (
+                  <div className="task-add-form" style={{ marginBottom: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem' }}>
+                    <div className="form-group-inline" style={{ marginBottom: '0.75rem' }}>
+                      <label>Template</label>
+                      <select
+                        value={addTaskTemplateId}
+                        onChange={(e) => {
+                          setAddTaskTemplateId(e.target.value)
+                          const t = taskTemplates.find(tpl => tpl.templateId === e.target.value)
+                          if (t) setAddTaskName(t.name)
+                        }}
+                      >
+                        <option value="">-- Select template --</option>
+                        {taskTemplates.map((t) => (
+                          <option key={t.templateId} value={t.templateId}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group-inline" style={{ marginBottom: '0.75rem' }}>
+                      <label>Task Name *</label>
+                      <input
+                        type="text"
+                        value={addTaskName}
+                        onChange={(e) => setAddTaskName(e.target.value)}
+                        placeholder="Task name"
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={handleAddTaskToPlan}
+                        disabled={isAddingTask || !addTaskTemplateId || !addTaskName.trim()}
+                      >
+                        {isAddingTask ? 'Adding...' : 'Add Task'}
+                      </button>
+                      <button
+                        type="button"
+                        className="kanban-card-action-btn"
+                        onClick={() => {
+                          setShowAddTaskForm(false)
+                          setAddTaskTemplateId('')
+                          setAddTaskName('')
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="patient-plan-tasks-list">
+                  {selectedPlanForView.tasks.map((task) => (
+                    <div key={task.taskId} className="patient-plan-task-item">
+                      <div className="patient-plan-task-header">
+                        <span className="patient-plan-task-name">{task.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span
+                            className="patient-plan-task-status"
+                            style={{
+                              backgroundColor: getTaskStatusColor(task.status) + '20',
+                              color: getTaskStatusColor(task.status),
+                            }}
+                          >
+                            {getTaskStatusName(task.status)}
+                          </span>
+                          <button
+                            type="button"
+                            className="kanban-card-action-btn"
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                            onClick={() => handleRemoveTaskFromPlan(selectedPlanForView.planId, task.taskId)}
+                            disabled={isDeletingTaskId === task.taskId}
+                            title="Remove task"
+                          >
+                            {isDeletingTaskId === task.taskId ? '...' : 'Remove'}
+                          </button>
+                        </div>
+                      </div>
+                      {task.description && (
+                        <p className="patient-plan-task-description">{task.description}</p>
+                      )}
+                      <div className="patient-plan-task-progress-row">
+                        <label>Progress</label>
+                        <div className="patient-plan-task-progress-control">
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={editingTaskProgress[task.taskId] ?? task.progressPercentage ?? 0}
+                            onChange={(e) => setEditingTaskProgress(prev => ({ ...prev, [task.taskId]: parseInt(e.target.value, 10) }))}
+                            onMouseUp={(e) => {
+                              const pct = parseInt((e.target as HTMLInputElement).value, 10)
+                              handleUpdateTaskProgress(selectedPlanForView.planId, task.taskId, pct, task.status as number)
+                            }}
+                            onTouchEnd={(e) => {
+                              const pct = parseInt((e.target as HTMLInputElement).value, 10)
+                              handleUpdateTaskProgress(selectedPlanForView.planId, task.taskId, pct, task.status as number)
+                            }}
+                          />
+                          <span className="patient-plan-task-progress-value">{editingTaskProgress[task.taskId] ?? task.progressPercentage ?? 0}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

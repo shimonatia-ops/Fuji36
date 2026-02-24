@@ -1,11 +1,37 @@
+import { useState, useEffect } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import '../styles/App.css'
 import { useAuth } from '../context/AuthContext'
+import { apiClient } from '../services/api'
+import TherapistDashboard from '../components/dashboard/TherapistDashboard'
 
 export default function RoleDashboardPage() {
-  const { isAuthenticated, role, name, isLoading } = useAuth()
+  const { isAuthenticated, role, name, isLoading, userId } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+  const [therapistPatientCount, setTherapistPatientCount] = useState(0)
+  const [therapistTaskCount, setTherapistTaskCount] = useState(0)
+
+  useEffect(() => {
+    if (role !== 'therapist' || !userId) return
+    const load = async () => {
+      try {
+        const therapist = await apiClient.getTherapistByUserId(userId)
+        const patients = await apiClient.getTherapistPatients(therapist.therapistId)
+        setTherapistPatientCount(patients.length)
+        let totalTasks = 0
+        for (const p of patients) {
+          const plans = await apiClient.getPatientPlans(p.patientId)
+          totalTasks += plans.reduce((sum, pl) => sum + pl.tasks.length, 0)
+        }
+        setTherapistTaskCount(totalTasks)
+      } catch {
+        setTherapistPatientCount(0)
+        setTherapistTaskCount(0)
+      }
+    }
+    load()
+  }, [role, userId])
 
   if (isLoading) {
     return (
@@ -24,8 +50,7 @@ export default function RoleDashboardPage() {
       <h1>Welcome, {name}</h1>
       <p className="section-intro">
         You are signed in as <strong>{role}</strong>. This page represents what a future
-        dashboard could look like for this role once it is backed by your C# .NET Core
-        services.
+        dashboard could look like.
       </p>
       <div className="role-panels">
         {role === 'admin' && (
@@ -60,13 +85,16 @@ export default function RoleDashboardPage() {
           </div>
         )}
         {role === 'therapist' && (
-          <div className="role-panel">
-            <h2>Therapist workspace</h2>
-            <p>Monitor patient progress and adjust treatment plans.</p>
+          <div className="role-panel role-panel-therapist-dashboard">
+            <TherapistDashboard
+              patientCount={therapistPatientCount}
+              totalTasks={therapistTaskCount}
+              compact
+            />
             <button
               className="btn-primary"
               onClick={() => navigate('/therapist-care-board')}
-              style={{ marginTop: '1rem' }}
+              style={{ marginTop: '1.5rem' }}
             >
               Manage Patient Plans
             </button>
